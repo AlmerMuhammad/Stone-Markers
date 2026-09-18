@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Five Unmarked Stones</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kalam:wght@300;400;700&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --void:#000000;
+    --chalk:#efece6;
+    --chalk-dim:#8e8b85;
+    --panel:#151412;
+  }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --void:#000000; } }
+  :root[data-theme="dark"]{ --void:#000000; }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:var(--void); color:var(--chalk);
+    font-family:"Kalam","Segoe Print",cursive;
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden; touch-action:none;
+  }
+
+  .title{
+    position:fixed; top:clamp(10px,2vh,18px); left:0; right:0; text-align:center;
+    font-family:"Playfair Display",serif; font-weight:700; letter-spacing:.04em;
+    font-size:clamp(12px,1.6vw,15px); color:var(--chalk-dim); opacity:.55;
+    pointer-events:none; z-index:2;
+  }
+
+  .counter{
+    position:fixed; top:clamp(10px,2vh,18px); left:clamp(10px,2vw,20px);
+    font-size:clamp(11px,1.2vw,13.5px); color:var(--chalk-dim); opacity:.7;
+    z-index:5; pointer-events:none;
+  }
+
+  .stage{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    padding:clamp(46px,7vh,64px) clamp(8px,2vw,20px) clamp(70px,10vh,90px);
+  }
+  canvas#board{
+    display:block; max-width:100%; max-height:100%; width:auto; height:auto;
+    filter:drop-shadow(0 18px 38px rgba(0,0,0,.85));
+    cursor:grab; touch-action:none;
+  }
+  canvas#board.holding{ cursor:grabbing; }
+
+  .whisper{
+    position:fixed; left:50%; bottom:clamp(12px,2.4vh,22px); transform:translateX(-50%);
+    font-size:clamp(12px,1.3vw,14.5px); color:var(--chalk-dim);
+    text-align:center; opacity:0; transition:opacity .5s ease;
+    pointer-events:none; max-width:80vw; z-index:5;
+  }
+  .whisper.on{ opacity:1; }
+
+  /* ---- toolbar ---- */
+  .toolbar{
+    position:fixed; left:clamp(10px,2vw,20px); bottom:clamp(10px,2vh,20px);
+    display:flex; gap:clamp(6px,1vw,10px); z-index:6;
+  }
+  .icon-btn{
+    appearance:none; background:rgba(10,10,10,.5); border:1px solid rgba(142,139,133,.35);
+    color:var(--chalk-dim); cursor:pointer; border-radius:50%;
+    width:clamp(36px,4.2vw,44px); height:clamp(36px,4.2vw,44px);
+    display:flex; align-items:center; justify-content:center;
+    transition:color .15s ease, border-color .15s ease, transform .15s ease;
+    backdrop-filter:blur(2px);
+  }
+  .icon-btn:hover{ color:var(--chalk); border-color:var(--chalk-dim); }
+  .icon-btn:active{ transform:scale(.93); }
+  .icon-btn:focus-visible{ outline:2px dashed var(--chalk); outline-offset:3px; }
+  .icon-btn svg{ width:56%; height:56%; }
+
+  /* ---- chat ---- */
+  .chat-wrap{
+    position:fixed; right:clamp(10px,2vw,20px); bottom:clamp(10px,2vh,20px);
+    display:flex; flex-direction:column; align-items:flex-end; gap:10px; z-index:8;
+  }
+  .chat-panel{
+    width:min(280px,74vw); background:rgba(12,11,10,.92); border:1px solid rgba(142,139,133,.35);
+    border-radius:10px; overflow:hidden; box-shadow:0 14px 34px rgba(0,0,0,.6);
+    max-height:0; opacity:0; transform:translateY(6px) scale(.98);
+    transition:max-height .35s ease, opacity .3s ease, transform .3s ease;
+    pointer-events:none;
+  }
+  .chat-panel.open{ max-height:260px; opacity:1; transform:translateY(0) scale(1); pointer-events:auto; }
+  .chat-log{
+    max-height:160px; overflow-y:auto; padding:12px 12px 4px;
+    display:flex; flex-direction:column; gap:8px;
+    font-size:13.5px; line-height:1.4;
+  }
+  .msg{ max-width:92%; }
+  .msg.you{ align-self:flex-end; color:var(--chalk); text-align:right; }
+  .msg.sys{ align-self:flex-start; color:var(--chalk-dim); }
+  .chat-form{ display:flex; border-top:1px solid rgba(142,139,133,.25); }
+  .chat-form input{
+    flex:1; background:transparent; border:0; color:var(--chalk);
+    font-family:"Kalam",cursive; font-size:14px; padding:10px 12px; outline:none;
+  }
+  .chat-form input::placeholder{ color:var(--chalk-dim); }
+  .chat-form button{
+    background:transparent; border:0; color:var(--chalk-dim); cursor:pointer;
+    padding:0 14px; font-size:16px;
+  }
+  .chat-form button:hover{ color:var(--chalk); }
+  .chat-icon{
+    appearance:none; width:clamp(40px,4.6vw,48px); height:clamp(40px,4.6vw,48px);
+    border-radius:50%; background:rgba(10,10,10,.55); border:1px solid rgba(142,139,133,.4);
+    color:var(--chalk-dim); font-size:20px; cursor:pointer; backdrop-filter:blur(2px);
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .chat-icon:hover{ color:var(--chalk); border-color:var(--chalk-dim); }
+  .chat-icon:focus-visible{ outline:2px dashed var(--chalk); outline-offset:3px; }
+
+  @media (prefers-reduced-motion:reduce){ *{ transition:none!important; animation:none!important; } }
+
+  @media (max-width:720px){
+    .stage{ padding:40px 4px 64px; }
+    .toolbar{ bottom:8px; left:8px; }
+    .chat-wrap{ bottom:8px; right:8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="title">Five Unmarked Stones</div>
+<div class="counter" id="counter">0 / 5 marks found</div>
+
+<div class="stage">
+  <canvas id="board" width="1280" height="800" aria-label="A wide surface scattered with unmarked pieces"></canvas>
+</div>
+
+<p class="whisper" id="whisper" aria-live="polite"></p>
+
+<div class="toolbar">
+  <button class="icon-btn" id="hourglass" title="Remember" aria-label="Recall a hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7 2.5h10M7 21.5h10"/>
+      <path d="M7.6 2.5c0 4.4 3.4 6.1 4.4 7 1-.9 4.4-2.6 4.4-7"/>
+      <path d="M7.6 21.5c0-4.4 3.4-6.1 4.4-7 1 .9 4.4 2.6 4.4 7"/>
+      <path d="M12 9.9v.9"/>
+    </svg>
+  </button>
+  <button class="icon-btn" id="tCCW" title="Turn left" aria-label="Turn selected piece left">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 12a8 8 0 1 1 3 6.2"/><path d="M4 6v6h6"/>
+    </svg>
+  </button>
+  <button class="icon-btn" id="tCW" title="Turn right" aria-label="Turn selected piece right">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 12a8 8 0 1 0-3 6.2"/><path d="M20 6v6h-6"/>
+    </svg>
+  </button>
+  <button class="icon-btn" id="tShuffle" title="Shuffle loose pieces" aria-label="Shuffle loose pieces">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>
+    </svg>
+  </button>
+</div>
+
+<div class="chat-wrap">
+  <div class="chat-panel" id="chatPanel">
+    <div class="chat-log" id="chatLog"></div>
+    <form class="chat-form" id="chatForm">
+      <input id="chatInput" type="text" placeholder="type..." maxlength="24" autocomplete="off" />
+      <button type="submit" aria-label="send">&#10148;</button>
+    </form>
+  </div>
+  <button class="chat-icon" id="chatIcon" aria-label="Open message">&#9678;</button>
+</div>
+
+<script>
+(() => {
+  const W = 1280, H = 800;
+  const cv = document.getElementById('board');
+  const ctx = cv.getContext('2d');
+  const whisperEl = document.getElementById('whisper');
+  const counterEl = document.getElementById('counter');
+
+  /* ================= shared helpers ================= */
+  function mk(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+  const R = (a, b) => a + Math.random() * (b - a);
+  const norm = a => { a = a % (Math.PI * 2); if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return a; };
+
+  function makeGrain() {
+    const c = mk(180, 180), x = c.getContext('2d');
+    const d = x.createImageData(180, 180);
+    for (let i = 0; i < d.data.length; i += 4) {
+      const v = 128 + (Math.random() - .5) * 190;
+      d.data[i] = d.data[i + 1] = d.data[i + 2] = v;
+      d.data[i + 3] = 40 + Math.random() * 40;
+    }
+    x.putImageData(d, 0, 0);
+    return c;
+  }
+
+  function blur(src, r) {
+    const c = mk(src.width, src.height), x = c.getContext('2d');
+    if ('filter' in x) { x.filter = `blur(${r}px)`; x.drawImage(src, 0, 0); x.filter = 'none'; }
+    else { x.globalAlpha = .3; for (const [dx, dy] of [[-r, 0], [r, 0], [0, -r], [0, r], [0, 0]]) x.drawImage(src, dx, dy); }
+    return c;
+  }
+
+  let grainPattern, backdrop;
+
+  function makeBackdrop() {
+    const c = mk(W, H), x = c.getContext('2d');
+    x.fillStyle = '#0d0d0e'; x.fillRect(0, 0, W, H);
+    const g = x.createRadialGradient(W / 2, H / 2, 100, W / 2, H / 2, 760);
+    g.addColorStop(0, 'rgba(42,40,38,.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    x.fillStyle = g; x.fillRect(0, 0, W, H);
+    x.fillStyle = grainPattern; x.globalAlpha = .11; x.fillRect(0, 0, W, H); x.globalAlpha = 1;
+    return c;
+  }
+
+  function makeLetterMask(letter, box) {
+    const c = mk(W, H), x = c.getContext('2d');
+    x.fillStyle = '#000'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    let size = Math.min(box.h * .92, 300);
+    x.font = `900 ${size}px "Playfair Display", Georgia, serif`;
+    let mw = x.measureText(letter).width;
+    if (mw > box.w * .82) { size *= (box.w * .82) / mw; x.font = `900 ${size}px "Playfair Display", Georgia, serif`; }
+    x.fillText(letter, box.x + box.w / 2, box.y + box.h / 2 + size * .02);
+    return c;
+  }
+
+  /* ---------- generic broken-piece carving ---------- */
+  function carveGrid({ x, y, w, h, cols, rows, glyphMaskCanvas, texFn }) {
+    const cw = w / cols, ch = h / rows;
+    const pts = [];
+    for (let i = 0; i <= cols; i++) { pts[i] = []; for (let j = 0; j <= rows; j++) pts[i][j] = { x: x + i * cw + R(-9, 9), y: y + j * ch + R(-9, 9) }; }
+    const ctrl = {};
+    const key = (a, b, c, d) => `${a},${b}|${c},${d}`;
+    function ctrlFor(i1, j1, i2, j2) {
+      const k = key(Math.min(i1, i2), Math.min(j1, j2), Math.max(i1, i2), Math.max(j1, j2));
+      if (!ctrl[k]) {
+        const a = pts[i1][j1], b = pts[i2][j2];
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const nx = -(b.y - a.y), ny = (b.x - a.x), len = Math.hypot(nx, ny) || 1;
+        const off = R(-8, 8);
+        ctrl[k] = { x: mx + nx / len * off, y: my + ny / len * off };
+      }
+      return ctrl[k];
+    }
+    const pieces = [];
+    for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+      const corners = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]];
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      corners.forEach(([ci, cj]) => { const p = pts[ci][cj]; x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); });
+      const bb = { x: Math.floor(x0 - 14), y: Math.floor(y0 - 14), w: Math.ceil(x1 - x0 + 28), h: Math.ceil(y1 - y0 + 28) };
+      const c = mk(bb.w, bb.h), cx = c.getContext('2d');
+      const tracePath = () => {
+        const p0 = pts[corners[0][0]][corners[0][1]];
+        cx.moveTo(p0.x, p0.y);
+        for (let n = 0; n < 4; n++) {
+          const a = corners[n], b = corners[(n + 1) % 4];
+          const cp = ctrlFor(a[0], a[1], b[0], b[1]);
+          const q = pts[b[0]][b[1]];
+          cx.quadraticCurveTo(cp.x, cp.y, q.x, q.y);
+        }
+        cx.closePath();
+      };
+      cx.save(); cx.translate(-bb.x, -bb.y);
+      cx.beginPath(); tracePath();
+      cx.fillStyle = '#222'; cx.fill();
+      cx.restore();
+      cx.globalCompositeOperation = 'source-atop';
+      texFn(cx, bb);
+      cx.globalCompositeOperation = 'source-over';
+      cx.save(); cx.translate(-bb.x, -bb.y);
+      cx.beginPath(); tracePath();
+      cx.strokeStyle = 'rgba(255,255,255,.12)'; cx.lineWidth = 1.4; cx.stroke();
+      cx.restore();
+      cx.globalCompositeOperation = 'destination-out';
+      cx.drawImage(glyphMaskCanvas, -bb.x, -bb.y);
+      cx.globalCompositeOperation = 'source-over';
+      const dat = cx.getImageData(0, 0, bb.w, bb.h).data;
+      let area = 0; const alpha = new Uint8Array(bb.w * bb.h);
+      for (let n = 0, m = 0; n < dat.length; n += 4, m++) { alpha[m] = dat[n + 3]; if (dat[n + 3] > 40) area++; }
+      if (area > 500) pieces.push({ sprite: c, alpha, aw: bb.w, ah: bb.h, home: { x: bb.x + bb.w / 2, y: bb.y + bb.h / 2 }, x: 0, y: 0, rot: 0, locked: false });
+    }
+    return pieces;
+  }
+
+  /* ---------- five distinct textures, one per family of pieces ---------- */
+  function stoneTex(cx, bb) {
+    const g = cx.createLinearGradient(0, 0, bb.w, bb.h);
+    g.addColorStop(0, 'rgba(120,118,114,.55)'); g.addColorStop(.5, 'rgba(70,68,65,.5)'); g.addColorStop(1, 'rgba(30,29,27,.6)');
+    cx.fillStyle = g; cx.fillRect(0, 0, bb.w, bb.h);
+    cx.fillStyle = grainPattern; cx.globalAlpha = .22; cx.fillRect(0, 0, bb.w, bb.h); cx.globalAlpha = 1;
+    for (let n = 0; n < 9; n++) {
+      cx.strokeStyle = `rgba(18,18,16,${R(.06, .16)})`; cx.lineWidth = R(.6, 1.6);
+      const sx = R(0, bb.w), sy = R(0, bb.h);
+      cx.beginPath(); cx.moveTo(sx, sy); cx.lineTo(sx + R(-28, 28), sy + R(-28, 28)); cx.stroke();
+    }
+  }
+  function glassTex(cx, bb) {
+    const g = cx.createLinearGradient(0, 0, bb.w, bb.h);
+    g.addColorStop(0, 'rgba(150,190,210,.5)'); g.addColorStop(.5, 'rgba(55,85,105,.4)'); g.addColorStop(1, 'rgba(15,25,35,.55)');
+    cx.fillStyle = g; cx.fillRect(0, 0, bb.w, bb.h);
+    cx.fillStyle = grainPattern; cx.globalAlpha = .2; cx.fillRect(0, 0, bb.w, bb.h); cx.globalAlpha = 1;
+    for (let n = 0; n < 3; n++) {
+      cx.strokeStyle = `rgba(255,255,255,${R(.08, .22)})`; cx.lineWidth = R(1, 2.2);
+      const x0 = R(0, bb.w);
+      cx.beginPath(); cx.moveTo(x0, 0); cx.lineTo(x0 + R(-20, 20), bb.h); cx.stroke();
+    }
+  }
+  function fabricTex(cx, bb) {
+    cx.fillStyle = '#3a332c'; cx.fillRect(0, 0, bb.w, bb.h);
+    const step = 6;
+    for (let x = -bb.h; x < bb.w; x += step) {
+      cx.strokeStyle = `rgba(200,180,150,${R(.05, .13)})`; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x + bb.h, bb.h); cx.stroke();
+    }
+    for (let x = 0; x < bb.w + bb.h; x += step) {
+      cx.strokeStyle = `rgba(55,46,37,${R(.05, .1)})`; cx.lineWidth = 1;
+      cx.beginPath(); cx.moveTo(x, 0); cx.lineTo(x - bb.h, bb.h); cx.stroke();
+    }
+    cx.fillStyle = grainPattern; cx.globalAlpha = .14; cx.fillRect(0, 0, bb.w, bb.h); cx.globalAlpha = 1;
+  }
+  function waterTex(cx, bb) {
+    const g = cx.createLinearGradient(0, 0, bb.w, bb.h);
+    g.addColorStop(0, 'rgba(60,100,110,.5)'); g.addColorStop(.5, 'rgba(30,60,72,.5)'); g.addColorStop(1, 'rgba(10,26,34,.6)');
+    cx.fillStyle = g; cx.fillRect(0, 0, bb.w, bb.h);
+    for (let n = 0; n < 4; n++) {
+      cx.strokeStyle = `rgba(210,230,235,${R(.05, .14)})`; cx.lineWidth = R(.8, 1.6);
+      const cxp = R(0, bb.w), cyp = R(0, bb.h), rad = R(10, 40);
+      cx.beginPath(); cx.arc(cxp, cyp, rad, 0, 7); cx.stroke();
+    }
+    cx.fillStyle = grainPattern; cx.globalAlpha = .12; cx.fillRect(0, 0, bb.w, bb.h); cx.globalAlpha = 1;
+  }
+  function paperTex(cx, bb) {
+    cx.fillStyle = '#c9c5bd'; cx.fillRect(0, 0, bb.w, bb.h);
+    for (let i = 0; i < 14; i++) {
+      cx.strokeStyle = `rgba(90,84,76,${R(.03, .09)})`; cx.lineWidth = R(.5, 1.4);
+      const sx = R(0, bb.w), sy = R(0, bb.h);
+      cx.beginPath(); cx.moveTo(sx, sy); cx.quadraticCurveTo(sx + R(-20, 20), sy + R(-14, 14), sx + R(-34, 34), sy + R(-24, 24)); cx.stroke();
+    }
+    cx.fillStyle = grainPattern; cx.globalAlpha = .38; cx.fillRect(0, 0, bb.w, bb.h); cx.globalAlpha = 1;
+    const g = cx.createRadialGradient(bb.w * .3, bb.h * .3, 4, bb.w * .5, bb.h * .5, Math.max(bb.w, bb.h) * .8);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(20,18,16,.3)');
+    cx.fillStyle = g; cx.fillRect(0, 0, bb.w, bb.h);
+  }
+
+  /* ================= the five hidden marks, scattered as one surface ================= */
+  const LETTERS = [
+    { id: 'V', box: { x: 86,  y: 84,  w: 300, h: 230 }, cols: 3, rows: 2, tex: stoneTex  },
+    { id: 'R', box: { x: 894, y: 66,  w: 300, h: 230 }, cols: 3, rows: 2, tex: glassTex  },
+    { id: 'X', box: { x: 118, y: 486, w: 300, h: 230 }, cols: 2, rows: 3, tex: fabricTex },
+    { id: 'W', box: { x: 490, y: 284, w: 300, h: 230 }, cols: 2, rows: 3, tex: waterTex  },
+    { id: 'K', box: { x: 894, y: 500, w: 300, h: 230 }, cols: 2, rows: 2, tex: paperTex  }
+  ];
+
+  let allPieces = [];
+  const letterMasks = {};
+  const discovered = new Set();
+  const discoveredAt = {};
+  let selected = null, held = null, grabDX = 0, grabDY = 0;
+  let hintFlashUntil = 0;
+
+  function buildPieces() {
+    allPieces = [];
+    LETTERS.forEach(L => {
+      const mask = makeLetterMask(L.id, L.box);
+      letterMasks[L.id] = { mask, maskBlur: blur(mask, 10), box: L.box };
+      const pcs = carveGrid({ x: L.box.x, y: L.box.y, w: L.box.w, h: L.box.h, cols: L.cols, rows: L.rows, glyphMaskCanvas: mask, texFn: L.tex });
+      pcs.forEach(p => { p.letterId = L.id; });
+      allPieces.push(...pcs);
+    });
+    scatterAll();
+  }
+
+  function scatterAll() {
+    const pad = 70;
+    allPieces.forEach(p => {
+      p.locked = false;
+      let k = Math.floor(Math.random() * 11) - 5; if (k === 0) k = 6;
+      p.rot = k * (Math.PI / 12);
+      p.x = R(pad, W - pad); p.y = R(pad, H - pad);
+    });
+    discovered.clear();
+    for (const k in discoveredAt) delete discoveredAt[k];
+    selected = held = null;
+    updateCounter();
+  }
+
+  function shuffleLoose() {
+    const pad = 70;
+    allPieces.forEach(p => {
+      if (p.locked) return;
+      let k = Math.floor(Math.random() * 11) - 5; if (k === 0) k = 6;
+      p.rot = k * (Math.PI / 12);
+      p.x = R(pad, W - pad); p.y = R(pad, H - pad);
+    });
+    selected = null;
+    say('The loose pieces settle differently now.');
+  }
+
+  function hitTest(p, pt) {
+    const dx = pt.x - p.x, dy = pt.y - p.y, c = Math.cos(-p.rot), s = Math.sin(-p.rot);
+    const lx = (dx * c - dy * s) + p.aw / 2, ly = (dx * s + dy * c) + p.ah / 2;
+    if (lx < 0 || ly < 0 || lx >= p.aw || ly >= p.ah) return false;
+    return p.alpha[(ly | 0) * p.aw + (lx | 0)] > 40;
+  }
+
+  function pointerDown(pt) {
+    for (let i = allPieces.length - 1; i >= 0; i--) {
+      const p = allPieces[i];
+      if (!p.locked && hitTest(p, pt)) {
+        held = selected = p;
+        grabDX = p.x - pt.x; grabDY = p.y - pt.y;
+        allPieces.splice(i, 1); allPieces.push(p);
+        return;
+      }
+    }
+    selected = null;
+  }
+  function pointerMove(pt) { if (held) { held.x = pt.x + grabDX; held.y = pt.y + grabDY; } }
+  function trySnap(p) {
+    if (Math.hypot(p.x - p.home.x, p.y - p.home.y) < 26 && Math.abs(norm(p.rot)) < 0.2) {
+      p.x = p.home.x; p.y = p.home.y; p.rot = 0; p.locked = true;
+      if (selected === p) selected = null;
+      checkLetterComplete(p.letterId);
+    }
+  }
+  function pointerUp() { if (held) { trySnap(held); held = null; } }
+  function rotateSelected(dir) {
+    if (selected && !selected.locked) {
+      selected.rot = norm(selected.rot + dir * (Math.PI / 12));
+      trySnap(selected);
+    }
+  }
+
+  function checkLetterComplete(id) {
+    if (discovered.has(id)) return;
+    const group = allPieces.filter(p => p.letterId === id);
+    if (group.length && group.every(p => p.locked)) {
+      discovered.add(id);
+      discoveredAt[id] = performance.now();
+      updateCounter();
+      say('Something settles into place.');
+    }
+  }
+
+  function updateCounter() { counterEl.textContent = discovered.size + ' / 5 marks found'; }
+
+  /* ---- whisper ---- */
+  function say(t) {
+    whisperEl.textContent = t;
+    whisperEl.classList.add('on');
+    clearTimeout(say._t);
+    say._t = setTimeout(() => whisperEl.classList.remove('on'), 5200);
+  }
+
+  /* ---- hourglass: a brief visual-memory flash of where the marks live, not what they are ---- */
+  function triggerHint() {
+    hintFlashUntil = performance.now() + 1500;
+    say('Hold still. Let the surface remember itself.');
+  }
+
+  /* ---- caesar decode, applied silently, no table shown ---- */
+  function caesarDecode(s) {
+    const up = s.toUpperCase();
+    let out = '';
+    for (const ch of up) {
+      if (ch >= 'A' && ch <= 'Z') out += String.fromCharCode(((ch.charCodeAt(0) - 65 - 3 + 26) % 26) + 65);
+      else out += ch;
+    }
+    return out;
+  }
+
+  /* ================= draw loop ================= */
+  function draw(now) {
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(backdrop, 0, 0);
+
+    if (now < hintFlashUntil) {
+      const remain = (hintFlashUntil - now) / 1500;
+      LETTERS.forEach(L => {
+        if (discovered.has(L.id)) return;
+        ctx.save();
+        ctx.globalAlpha = 0.32 * remain;
+        ctx.strokeStyle = 'rgba(239,236,230,0.85)';
+        ctx.setLineDash([6, 8]);
+        ctx.lineWidth = 1.3;
+        ctx.strokeRect(L.box.x, L.box.y, L.box.w, L.box.h);
+        ctx.restore();
+      });
+    }
+
+    LETTERS.forEach(L => {
+      if (!discovered.has(L.id)) return;
+      const t = now - (discoveredAt[L.id] || 0);
+      const k = Math.min(1, t / 1200);
+      ctx.save();
+      ctx.globalAlpha = t < 1200 ? 0.3 * k : 0.12;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(letterMasks[L.id].maskBlur, 0, 0);
+      ctx.restore();
+    });
+
+    const order = [...allPieces.filter(p => p.locked), ...allPieces.filter(p => !p.locked)];
+    order.forEach(p => {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      if (!p.locked) { ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = p === selected ? 22 : 10; ctx.shadowOffsetY = 6; }
+      ctx.drawImage(p.sprite, -p.aw / 2, -p.ah / 2);
+      ctx.restore();
+      if (p === selected && !p.locked) {
+        ctx.save(); ctx.setLineDash([5, 6]); ctx.lineDashOffset = -now / 60;
+        ctx.strokeStyle = 'rgba(245,242,236,.5)'; ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, p.aw * .5, p.ah * .5, 0, 0, 7); ctx.stroke(); ctx.restore();
+      }
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  /* ================= pointer wiring ================= */
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height }; };
+
+  cv.addEventListener('pointerdown', e => { cv.setPointerCapture(e.pointerId); cv.classList.add('holding'); pointerDown(pos(e)); });
+  cv.addEventListener('pointermove', e => { pointerMove(pos(e)); });
+  cv.addEventListener('pointerup', () => { cv.classList.remove('holding'); pointerUp(); });
+  cv.addEventListener('pointercancel', () => { cv.classList.remove('holding'); pointerUp(); });
+
+  document.getElementById('tCCW').onclick = () => rotateSelected(-1);
+  document.getElementById('tCW').onclick = () => rotateSelected(1);
+  document.getElementById('tShuffle').onclick = () => shuffleLoose();
+  document.getElementById('hourglass').onclick = () => triggerHint();
+
+  addEventListener('keydown', e => {
+    if (e.key === 'q' || e.key === 'Q' || e.key === 'ArrowLeft') rotateSelected(-1);
+    if (e.key === 'e' || e.key === 'E' || e.key === 'ArrowRight') rotateSelected(1);
+  });
+
+  /* ================= floating chat ================= */
+  const chatIcon = document.getElementById('chatIcon');
+  const chatPanel = document.getElementById('chatPanel');
+  const chatLog = document.getElementById('chatLog');
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatInput');
+
+  chatIcon.onclick = () => {
+    chatPanel.classList.toggle('open');
+    if (chatPanel.classList.contains('open')) chatInput.focus();
+  };
+
+  function addMsg(cls, text, href) {
+    const d = document.createElement('div');
+    d.className = 'msg ' + cls;
+    if (href) {
+      const a = document.createElement('a');
+      a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      a.textContent = text;
+      a.style.color = 'inherit'; a.style.textDecoration = 'underline';
+      d.appendChild(a);
+    } else {
+      d.textContent = text;
+    }
+    chatLog.appendChild(d);
+    chatLog.scrollTop = chatLog.scrollHeight;
+  }
+
+  const SOUTH_LINK = 'https://www.englishliteratureebooks.com/elizabeth-gaskell-north-and-south-abridged.pdf';
+
+  function revealAll() {
+    const now = performance.now();
+    allPieces.forEach(p => { p.locked = true; p.x = p.home.x; p.y = p.home.y; p.rot = 0; });
+    selected = held = null;
+    LETTERS.forEach(L => { if (!discovered.has(L.id)) { discovered.add(L.id); discoveredAt[L.id] = now; } });
+    updateCounter();
+    say('Every piece finds its place at once.');
+  }
+
+  function submitChat() {
+    const raw = chatInput.value;
+    chatInput.value = '';
+    const clean = raw.trim();
+    if (!clean) return;
+    addMsg('you', clean);
+    if (clean.toUpperCase() === 'ALMER') { revealAll(); addMsg('sys', 'Everything aligns.'); return; }
+    if (!/^[A-Za-z]+$/.test(clean)) { addMsg('sys', 'Only letters mean anything here.'); return; }
+    const decoded = caesarDecode(clean);
+    if (decoded === 'SOUTH') addMsg('sys', decoded, SOUTH_LINK);
+    else addMsg('sys', decoded);
+  }
+
+  // Primary path: native form submit (covers the send button, and Enter on most keyboards).
+  chatForm.addEventListener('submit', e => { e.preventDefault(); submitChat(); });
+  // Safety net: some mobile/virtual keyboards don't reliably fire a submit event on Enter.
+  chatInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); submitChat(); }
+  });
+
+  /* ================= boot ================= */
+  async function boot() {
+    try { await document.fonts.load('900 200px "Playfair Display"'); await document.fonts.ready; } catch (_) {}
+    grainPattern = ctx.createPattern(makeGrain(), 'repeat');
+    backdrop = makeBackdrop();
+    buildPieces();
+    say('Twenty-eight strange pieces, and nowhere they say they belong.');
+    requestAnimationFrame(draw);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
